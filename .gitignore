@@ -1,0 +1,6 @@
+.DS_Store
+
+# Only keep JSON + README under data/
+data/*
+!data/*.json
+!data/README.md
