@@ -1,61 +1,39 @@
 const DATA_URL = "data/municipalities2025.topo.json";
-const PREFECTURE_URL = "data/N03-20250101_prefecture.geojson";
+const PREFECTURE_URL = "data/prefectures2025.topo.json";
 const CSV_URL = "data/visits.csv";
 
 const statusEl = document.getElementById("status");
 const visitedCountEl = document.getElementById("visitedCount");
+const visitedPrefCountEl = document.getElementById("visitedPrefCount");
 const totalCountEl = document.getElementById("totalCount");
-const exportBtn = document.getElementById("exportBtn");
-const importInput = document.getElementById("importInput");
+const levelBarsEl = document.getElementById("levelBars");
+const globalMetricsEl = document.getElementById("globalMetrics");
+const prefCoverageBody = document.getElementById("prefCoverageBody");
 
 const levelByKey = new Map();
-const layersByKey = new Map();
 const metaByKey = new Map();
 let records = [];
 let totalFeatures = 0;
 let dataReady = false;
 let csvReady = false;
 let csvMissing = false;
+let map;
+let muniData;
+let prefData;
+let prefRowsCache = [];
 
-const LEVEL_STYLES = [
-  { fill: "#e1e7f0", fillOpacity: 0.22 }, // 未去过
-  { fill: "#9ec5ff", fillOpacity: 0.45 }, // 路过
-  { fill: "#4fd1c5", fillOpacity: 0.55 }, // 接地
-  { fill: "#22c55e", fillOpacity: 0.62 }, // 访问
-  { fill: "#f59e0b", fillOpacity: 0.7 }, // 宿泊
-  { fill: "#ef4444", fillOpacity: 0.75 }, // 居住
-];
-
-const map = L.map("map", {
-  zoomSnap: 0.5,
-}).setView([36.2, 138.25], 5);
-
-const baseLayers = {
-  "Carto Light": L.tileLayer(
-    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    }
-  ),
-  OpenStreetMap: L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap contributors",
-    }
-  ),
-  "OpenStreetMap JP": L.tileLayer("https://tile.openstreetmap.jp/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "© OpenStreetMap contributors",
-  }),
+const sortState = {
+  coverage: { key: "ratio", dir: "desc" },
 };
 
-baseLayers["Carto Light"].addTo(map);
-L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
-
-map.createPane("prefecture");
-map.getPane("prefecture").style.zIndex = 450;
+const LEVEL_STYLES = [
+  { fill: "#e1e7f0", fillOpacity: 0.2 },
+  { fill: "#0664f0", fillOpacity: 0.45 },
+  { fill: "#20b6a7", fillOpacity: 0.55 },
+  { fill: "#b822c5", fillOpacity: 0.62 },
+  { fill: "#f59e0b", fillOpacity: 0.7 },
+  { fill: "#ef4444", fillOpacity: 0.75 },
+];
 
 function updateStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -66,24 +44,18 @@ function updateReadyStatus() {
   if (!dataReady) return;
   if (csvReady) {
     updateStatus("加载完成，已读取 CSV。", false);
-    return;
+  } else if (csvMissing) {
+    updateStatus("未找到 CSV，已使用空数据。请编辑 data/visits.csv。", true);
+  } else {
+    updateStatus("行政区加载完成，正在读取 CSV...", false);
   }
-  if (csvMissing) {
-    updateStatus("未找到 CSV，已使用空数据。你可以在 data/visits.csv 中编辑。", true);
-    return;
-  }
-  updateStatus("行政区加载完成，正在读取 CSV...", false);
 }
 
 function getKey(pref, muni) {
   return `${pref}||${muni}`;
 }
 
-function getPrefecture(props) {
-  return props.N03_001 || "";
-}
-
-function getMunicipality(props) {
+function getMunicipalityFromProps(props) {
   const county = props.N03_002 || "";
   const city = props.N03_003 || "";
   const ward = props.N03_004 || "";
@@ -102,28 +74,23 @@ function styleForLevel(level) {
   const safe = Math.min(5, Math.max(0, level || 0));
   const style = LEVEL_STYLES[safe] || LEVEL_STYLES[0];
   return {
-    color: "#4a5563",
-    weight: 1,
+    strokeColor: "#6a86a8",
+    strokeOpacity: 0.6,
+    strokeWeight: 0.8,
     fillColor: style.fill,
     fillOpacity: style.fillOpacity,
+    clickable: false,
   };
 }
 
-function applyStyles() {
-  layersByKey.forEach((layers, key) => {
+function applyLevelsToFeatures() {
+  if (!muniData) return;
+  muniData.forEach((feature) => {
+    const key = feature.getProperty("key");
+    if (!key) return;
     const level = getLevel(key);
-    const style = styleForLevel(level);
-    layers.forEach((layer) => layer.setStyle(style));
+    feature.setProperty("level", level);
   });
-}
-
-function updateStats() {
-  let marked = 0;
-  layersByKey.forEach((_, key) => {
-    if (getLevel(key) > 0) marked += 1;
-  });
-  visitedCountEl.textContent = marked;
-  totalCountEl.textContent = totalFeatures;
 }
 
 function parseCsvLine(line) {
@@ -176,38 +143,6 @@ function parseCsv(text) {
   return parsed;
 }
 
-function toCsvValue(value) {
-  if (value == null) return "";
-  const str = String(value);
-  if (str.includes(",") || str.includes("\"")) {
-    return `"${str.replace(/\"/g, "\"\"")}"`;
-  }
-  return str;
-}
-
-function serializeCsv(list) {
-  const lines = ["都道府县,市町村,拜访程度"];
-  list.forEach((row) => {
-    lines.push(
-      `${toCsvValue(row.pref)},${toCsvValue(row.muni)},${toCsvValue(row.level || "")}`
-    );
-  });
-  return `${lines.join("\n")}\n`;
-}
-
-function rebuildRecordsFromMeta() {
-  const rows = [];
-  metaByKey.forEach((meta, key) => {
-    rows.push({
-      pref: meta.pref,
-      muni: meta.muni,
-      level: getLevel(key),
-    });
-  });
-  rows.sort((a, b) => (a.pref === b.pref ? a.muni.localeCompare(b.muni) : a.pref.localeCompare(b.pref)));
-  records = rows;
-}
-
 function applyRecords(list) {
   levelByKey.clear();
   records = list;
@@ -215,53 +150,153 @@ function applyRecords(list) {
     const key = getKey(row.pref, row.muni);
     levelByKey.set(key, row.level || 0);
   });
-  applyStyles();
-  updateStats();
+  applyLevelsToFeatures();
+  refreshAnalytics();
 }
 
-function downloadCsv(list) {
-  const blob = new Blob([serializeCsv(list)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  const date = new Date();
-  const stamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
-  link.download = `jp-visits-${stamp}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
-exportBtn.addEventListener("click", () => {
-  if (!records.length) rebuildRecordsFromMeta();
-  const merged = records.map((row) => {
-    const key = getKey(row.pref, row.muni);
-    return { ...row, level: getLevel(key) };
+function buildPrefStats() {
+  const stats = new Map();
+  metaByKey.forEach((meta, key) => {
+    let entry = stats.get(meta.pref);
+    if (!entry) {
+      entry = { pref: meta.pref, total: 0, visited: 0, sum: 0 };
+      stats.set(meta.pref, entry);
+    }
+    entry.total += 1;
+    const level = getLevel(key);
+    if (level > 0) {
+      entry.visited += 1;
+      entry.sum += level;
+    }
   });
-  downloadCsv(merged);
-});
+  const rows = Array.from(stats.values()).map((entry) => ({
+    ...entry,
+    ratio: entry.total ? entry.visited / entry.total : 0,
+    avg: entry.visited ? entry.sum / entry.visited : 0,
+  }));
+  rows.sort((a, b) => a.pref.localeCompare(b.pref));
+  return rows;
+}
 
-importInput.addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const parsed = parseCsv(text);
-    if (!parsed.length) throw new Error("Empty CSV");
-    applyRecords(parsed);
-    csvReady = true;
-    csvMissing = false;
-    updateReadyStatus();
-  } catch (err) {
-    console.error(err);
-    updateStatus("CSV 导入失败，请确认三列格式。", true);
-  } finally {
-    event.target.value = "";
+function updateLevelBars(levelCounts) {
+  if (!levelBarsEl) return;
+  const labels = ["未去过", "路过", "接地", "访问", "宿泊", "居住"];
+  const max = Math.max(...levelCounts, 1);
+  levelBarsEl.innerHTML = "";
+  levelCounts.forEach((count, idx) => {
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = labels[idx];
+    const bar = document.createElement("div");
+    bar.className = `bar level-${idx}`;
+    bar.style.width = `${(count / max) * 100}%`;
+    const value = document.createElement("div");
+    value.className = "bar-value";
+    value.textContent = `${count}`;
+    row.appendChild(label);
+    row.appendChild(bar);
+    row.appendChild(value);
+    levelBarsEl.appendChild(row);
+  });
+}
+
+function updateGlobalMetrics(marked, visitedPref, avgLevel) {
+  if (!globalMetricsEl) return;
+  const ratio = totalFeatures ? (marked / totalFeatures) * 100 : 0;
+  globalMetricsEl.innerHTML = `
+    <div class="metric"><span>探索覆盖率</span><strong>${ratio.toFixed(1)}%</strong></div>
+    <div class="metric"><span>已探索市町村</span><strong>${marked}</strong></div>
+    <div class="metric"><span>已探索县</span><strong>${visitedPref}</strong></div>
+    <div class="metric"><span>平均拜访程度</span><strong>${avgLevel.toFixed(2)}</strong></div>
+  `;
+}
+
+function sortRows(rows, state) {
+  const sorted = rows.slice();
+  sorted.sort((a, b) => {
+    const dir = state.dir === "asc" ? 1 : -1;
+    const key = state.key;
+    if (key === "pref") return a.pref.localeCompare(b.pref) * dir;
+    return (a[key] - b[key]) * dir;
+  });
+  return sorted;
+}
+
+function renderCoverageTable(rows) {
+  if (!prefCoverageBody) return;
+  const sorted = sortRows(rows, sortState.coverage);
+  prefCoverageBody.innerHTML = "";
+  sorted.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.pref}</td>
+      <td>${row.visited}</td>
+      <td>${row.total}</td>
+      <td>${(row.ratio * 100).toFixed(1)}%</td>
+      <td>${row.avg.toFixed(2)}</td>
+    `;
+    prefCoverageBody.appendChild(tr);
+  });
+}
+
+function refreshAnalytics() {
+  if (!dataReady) return;
+  let marked = 0;
+  let sumLevels = 0;
+  let visitedCountForAvg = 0;
+  const levelCounts = [0, 0, 0, 0, 0, 0];
+
+  metaByKey.forEach((_, key) => {
+    const level = getLevel(key);
+    levelCounts[level] += 1;
+    if (level > 0) {
+      marked += 1;
+      sumLevels += level;
+      visitedCountForAvg += 1;
+    }
+  });
+
+  const prefRows = buildPrefStats();
+  prefRowsCache = prefRows;
+  const visitedPref = prefRows.filter((row) => row.visited > 0).length;
+  const avgLevel = visitedCountForAvg ? sumLevels / visitedCountForAvg : 0;
+
+  visitedCountEl.textContent = marked;
+  totalCountEl.textContent = totalFeatures;
+  visitedPrefCountEl.textContent = visitedPref;
+
+  updateLevelBars(levelCounts);
+  updateGlobalMetrics(marked, visitedPref, avgLevel);
+  renderCoverageTable(prefRows);
+}
+
+function setupSortHandlers() {
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const table = btn.dataset.table;
+      const key = btn.dataset.key;
+      const state = sortState[table];
+      if (!state) return;
+      if (state.key === key) {
+        state.dir = state.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.key = key;
+        state.dir = key === "pref" ? "asc" : "desc";
+      }
+      renderCoverageTable(prefRowsCache);
+    });
+  });
+}
+
+function scheduleChunk(callback) {
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(callback, { timeout: 120 });
+  } else {
+    setTimeout(callback, 16);
   }
-});
+}
 
 async function loadCsv() {
   try {
@@ -275,103 +310,128 @@ async function loadCsv() {
   } catch (err) {
     console.warn(err);
     csvMissing = true;
+    applyRecords([]);
     updateReadyStatus();
   }
 }
 
-async function loadData() {
-  try {
-    const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error("Data request failed");
-    const topo = await res.json();
-    const objName = topo.objects && Object.keys(topo.objects)[0];
-    if (!objName) throw new Error("No objects in topojson");
-
-    const geojson = topojson.feature(topo, topo.objects[objName]);
-
-    totalFeatures = 0;
-    layersByKey.clear();
-    metaByKey.clear();
-    const counted = new Set();
-
-    L.geoJSON(geojson, {
-      style: (feature) => {
-        const props = feature.properties || {};
-        const pref = getPrefecture(props);
-        const muni = getMunicipality(props);
-        const key = getKey(pref, muni);
-        return styleForLevel(getLevel(key));
-      },
-      onEachFeature: (feature, layer) => {
-        const props = feature.properties || {};
-        const pref = getPrefecture(props);
-        const muni = getMunicipality(props);
-        const key = getKey(pref, muni);
-        if (!pref || !muni) return;
-
-        if (!layersByKey.has(key)) layersByKey.set(key, new Set());
-        layersByKey.get(key).add(layer);
-
-        if (!metaByKey.has(key)) {
-          metaByKey.set(key, {
-            pref,
-            muni,
-            label: `${pref}${muni}`,
-          });
-        }
-
-        if (!counted.has(key)) {
-          counted.add(key);
-          totalFeatures += 1;
-        }
-
-        const meta = metaByKey.get(key);
-        if (meta?.label) layer.bindTooltip(meta.label, { sticky: true });
-      },
-    }).addTo(map);
-
-    if (geojson.bbox) {
-      const [minX, minY, maxX, maxY] = geojson.bbox;
-      map.fitBounds([
-        [minY, minX],
-        [maxY, maxX],
-      ]);
-    }
-
-    dataReady = true;
-    applyStyles();
-    updateStats();
-    if (totalFeatures === 0) {
-      updateStatus("数据为空，请先生成 data/municipalities2025.topo.json。", true);
-    } else {
-      updateReadyStatus();
-    }
-  } catch (err) {
-    console.error(err);
-    updateStatus("数据加载失败，请确认 data/municipalities2025.topo.json 已生成。", true);
+async function loadMunicipalities() {
+  const res = await fetch(DATA_URL);
+  if (!res.ok) throw new Error("Data request failed");
+  const topo = await res.json();
+  const objName = topo.objects && Object.keys(topo.objects)[0];
+  if (!objName) throw new Error("No objects in topojson");
+  const geojson = topojson.feature(topo, topo.objects[objName]);
+  if (geojson.bbox && map) {
+    const [minX, minY, maxX, maxY] = geojson.bbox;
+    const bounds = new google.maps.LatLngBounds(
+      { lat: minY, lng: minX },
+      { lat: maxY, lng: maxX }
+    );
+    map.fitBounds(bounds);
   }
+  const features = geojson.features || [];
+  let index = 0;
+  const counted = new Set();
+  totalFeatures = 0;
+  metaByKey.clear();
+
+  const processChunk = () => {
+    const slice = features.slice(index, index + 1600);
+    if (!slice.length) {
+      dataReady = true;
+      refreshAnalytics();
+      updateReadyStatus();
+      return;
+    }
+    const added = muniData.addGeoJson({
+      type: "FeatureCollection",
+      features: slice,
+    });
+    added.forEach((feature) => {
+      const pref = feature.getProperty("N03_001") || "";
+      const muni = getMunicipalityFromProps({
+        N03_002: feature.getProperty("N03_002") || "",
+        N03_003: feature.getProperty("N03_003") || "",
+        N03_004: feature.getProperty("N03_004") || "",
+      });
+      if (!pref || !muni) return;
+      const key = getKey(pref, muni);
+      feature.setProperty("key", key);
+      feature.setProperty("level", getLevel(key));
+      if (!metaByKey.has(key)) {
+        metaByKey.set(key, { pref, muni });
+      }
+      if (!counted.has(key)) {
+        counted.add(key);
+        totalFeatures += 1;
+      }
+    });
+    index += slice.length;
+    scheduleChunk(processChunk);
+  };
+
+  scheduleChunk(processChunk);
 }
 
 async function loadPrefectures() {
   try {
     const res = await fetch(PREFECTURE_URL);
     if (!res.ok) throw new Error("Prefecture request failed");
-    const geojson = await res.json();
-    L.geoJSON(geojson, {
-      pane: "prefecture",
-      interactive: false,
-      style: {
-        color: "#1f2937",
-        weight: 2.6,
-        opacity: 0.9,
-        fillOpacity: 0,
-      },
-    }).addTo(map);
+    const topo = await res.json();
+    const objName = topo.objects && Object.keys(topo.objects)[0];
+    if (!objName) throw new Error("No objects in prefecture topojson");
+    const geojson = topojson.feature(topo, topo.objects[objName]);
+    prefData.addGeoJson(geojson);
   } catch (err) {
     console.warn("Prefecture boundaries failed to load", err);
   }
 }
 
-loadData();
-loadCsv();
-loadPrefectures();
+function initMap() {
+  if (!window.google || !google.maps) {
+    updateStatus("Google Maps API 未加载，请检查 API Key。", true);
+    return;
+  }
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 36.2, lng: 138.25 },
+    zoom: 5,
+    mapTypeId: "roadmap",
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+    styles: [
+      { elementType: "geometry", stylers: [{ color: "#20243a" }] },
+      // { elementType: "labels.text.stroke", stylers: [{ color: "#0b0d15" }] },
+      // { elementType: "labels.text.fill", stylers: [{ color: "#9fa8c3" }] },
+      // { featureType: "poi", stylers: [{ visibility: "off" }] },
+      // { featureType: "road", elementType: "geometry", stylers: [{ color: "#394061" }] },
+      // { featureType: "water", elementType: "geometry", stylers: [{ color: "#151823" }] },
+    ]
+  }
+)
+
+;
+
+  muniData = new google.maps.Data({ map });
+  prefData = new google.maps.Data({ map });
+
+  muniData.setStyle((feature) => styleForLevel(feature.getProperty("level") || 0));
+  prefData.setStyle({
+    strokeColor: "#3b82f6",
+    strokeOpacity: 0.8,
+    strokeWeight: 2,
+    fillOpacity: 0,
+    clickable: false,
+  });
+
+  setupSortHandlers();
+  loadCsv();
+  loadMunicipalities().catch((err) => {
+    console.error(err);
+    updateStatus("数据加载失败，请确认 data/municipalities2025.topo.json 已生成。", true);
+  });
+  loadPrefectures();
+}
+
+initMap();

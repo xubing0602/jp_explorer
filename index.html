@@ -10,12 +10,6 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
     <link rel="stylesheet" href="./assets/app.css" />
   </head>
   <body>
@@ -27,50 +21,80 @@
         </div>
         <div class="stats">
           <div class="stat">
-            <div class="stat-label">已标记</div>
+            <div class="stat-label">已标记市町村</div>
             <div class="stat-value" id="visitedCount">0</div>
           </div>
           <div class="stat">
-            <div class="stat-label">总计</div>
+            <div class="stat-label">已探索县</div>
+            <div class="stat-value" id="visitedPrefCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">市町村总计</div>
             <div class="stat-value" id="totalCount">0</div>
           </div>
         </div>
+        <div class="legend legend-inline">
+          <span class="swatch level-0"></span>
+          <span>未去过</span>
+          <span class="swatch level-1"></span>
+          <span>路过</span>
+          <span class="swatch level-2"></span>
+          <span>接地</span>
+          <span class="swatch level-3"></span>
+          <span>访问</span>
+          <span class="swatch level-4"></span>
+          <span>宿泊</span>
+          <span class="swatch level-5"></span>
+          <span>居住</span>
+        </div>
+        <div id="status" class="status">正在加载行政区数据...</div>
       </header>
 
       <main class="content">
-        <section class="panel">
-          <div class="panel-title">操作</div>
-          <button id="exportBtn" class="btn">下载 CSV</button>
-          <label class="btn ghost" for="importInput">导入 CSV</label>
-          <input id="importInput" type="file" accept=".csv,text/csv" hidden />
-
-          <div class="panel-title">说明</div>
-          <p class="hint">
-            CSV 位于 <code>data/visits.csv</code>，包含三列：都道府县、市町村、拜访程度（空=未去过，1-5
-            由浅到深）。
-          </p>
-
-          <div class="panel-title">图例</div>
-          <div class="legend">
-            <span class="swatch level-0"></span>
-            <span>未去过</span>
-            <span class="swatch level-1"></span>
-            <span>路过</span>
-            <span class="swatch level-2"></span>
-            <span>接地</span>
-            <span class="swatch level-3"></span>
-            <span>访问</span>
-            <span class="swatch level-4"></span>
-            <span>宿泊</span>
-            <span class="swatch level-5"></span>
-            <span>居住</span>
-          </div>
-
-          <div id="status" class="status">正在加载行政区数据...</div>
-        </section>
-
         <section class="map-wrap">
           <div id="map"></div>
+        </section>
+
+        <section class="analytics">
+          <div class="analytics-grid">
+            <div class="card">
+              <div class="card-title">拜访程度分布</div>
+              <div id="levelBars" class="bars"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">全局概览</div>
+              <div class="metric-list" id="globalMetrics"></div>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="table-title">各县探索比例</div>
+            <div class="table-hint">可点击表头排序</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="pref">都道府县</button>
+                    </th>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="visited">已探索市町村</button>
+                    </th>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="total">总市町村</button>
+                    </th>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="ratio">探索比例</button>
+                    </th>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="avg">平均拜访程度</button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="prefCoverageBody"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </main>
 
@@ -79,16 +103,12 @@
           数据来源：国土数值信息（行政区域データ N03，基准日 2025-01-01）
         </div>
         <div>
-          地图底图：© OpenStreetMap contributors / © CARTO
+          底图：Google Maps（需要 API Key）
         </div>
       </footer>
     </div>
 
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAaFVpZPOA89d58t7aKdjlaM6qTKHynx_c"></script>
     <script src="https://unpkg.com/topojson-client@3"></script>
     <script src="./assets/app.js"></script>
   </body>
