@@ -25,7 +25,7 @@
             <div class="stat-value" id="visitedCount">0</div>
           </div>
           <div class="stat">
-            <div class="stat-label">已探索县</div>
+            <div class="stat-label">已解锁县</div>
             <div class="stat-value" id="visitedPrefCount">0</div>
           </div>
           <div class="stat">
@@ -68,24 +68,31 @@
           </div>
 
           <div class="table-card">
-            <div class="table-title">各县探索比例</div>
+            <div class="table-title">各县解锁比例</div>
             <div class="table-hint">可点击表头排序</div>
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr>
+                  <tr>                 
                     <th>
                       <button class="sort-btn" data-table="coverage" data-key="pref">都道府县</button>
                     </th>
                     <th>
-                      <button class="sort-btn" data-table="coverage" data-key="visited">已探索市町村</button>
-                    </th>
-                    <th>
                       <button class="sort-btn" data-table="coverage" data-key="total">总市町村</button>
+                    </th>   
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="visited">已解锁市町村</button>
+                    </th>
+
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="ratio">解锁比例</button>
                     </th>
                     <th>
-                      <button class="sort-btn" data-table="coverage" data-key="ratio">探索比例</button>
+                      <button class="sort-btn" data-table="coverage" data-key="explored">已探索市町村</button>
                     </th>
+                    <th>
+                      <button class="sort-btn" data-table="coverage" data-key="exploredRatio">探索比例</button>
+                    </th>                    
                     <th>
                       <button class="sort-btn" data-table="coverage" data-key="avg">平均拜访程度</button>
                     </th>

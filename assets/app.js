@@ -21,6 +21,7 @@ let map;
 let muniData;
 let prefData;
 let prefRowsCache = [];
+let infoWindow;
 
 const sortState = {
   coverage: { key: "ratio", dir: "desc" },
@@ -79,7 +80,7 @@ function styleForLevel(level) {
     strokeWeight: 0.8,
     fillColor: style.fill,
     fillOpacity: style.fillOpacity,
-    clickable: false,
+    clickable: true,
   };
 }
 
@@ -159,7 +160,7 @@ function buildPrefStats() {
   metaByKey.forEach((meta, key) => {
     let entry = stats.get(meta.pref);
     if (!entry) {
-      entry = { pref: meta.pref, total: 0, visited: 0, sum: 0 };
+      entry = { pref: meta.pref, total: 0, visited: 0, sum: 0, explored: 0 };
       stats.set(meta.pref, entry);
     }
     entry.total += 1;
@@ -168,11 +169,15 @@ function buildPrefStats() {
       entry.visited += 1;
       entry.sum += level;
     }
+    if (level >= 3) {
+      entry.explored += 1;
+    }
   });
   const rows = Array.from(stats.values()).map((entry) => ({
     ...entry,
     ratio: entry.total ? entry.visited / entry.total : 0,
     avg: entry.visited ? entry.sum / entry.visited : 0,
+    exploredRatio: entry.total ? entry.explored / entry.total : 0,
   }));
   rows.sort((a, b) => a.pref.localeCompare(b.pref));
   return rows;
@@ -202,13 +207,17 @@ function updateLevelBars(levelCounts) {
   });
 }
 
-function updateGlobalMetrics(marked, visitedPref, avgLevel) {
+function updateGlobalMetrics(marked, visitedPref, avgLevel, explored, exploredPref) {
   if (!globalMetricsEl) return;
   const ratio = totalFeatures ? (marked / totalFeatures) * 100 : 0;
+  const exploredRatio = totalFeatures ? (explored / totalFeatures) * 100 : 0;
+  const ratioPref = totalFeatures ? (visitedPref / 47) * 100 : 0;
+  const exploredRatioPref = totalFeatures ? (exploredPref / 47) * 100 : 0;
   globalMetricsEl.innerHTML = `
-    <div class="metric"><span>探索覆盖率</span><strong>${ratio.toFixed(1)}%</strong></div>
-    <div class="metric"><span>已探索市町村</span><strong>${marked}</strong></div>
-    <div class="metric"><span>已探索县</span><strong>${visitedPref}</strong></div>
+    <div class="metric"><span>已解锁市町村</span><strong>${marked} (${ratio.toFixed(1)}%)</strong> </div>
+    <div class="metric"><span>已解锁县</span><strong>${visitedPref} (${ratioPref.toFixed(1)}%)</strong></div>
+    <div class="metric"><span>已探索市町村</span><strong>${explored} (${exploredRatio.toFixed(1)}%)</strong></div>
+    <div class="metric"><span>已探索县</span><strong>${exploredPref} (${exploredRatioPref.toFixed(1)}%)</strong></div>
     <div class="metric"><span>平均拜访程度</span><strong>${avgLevel.toFixed(2)}</strong></div>
   `;
 }
@@ -232,9 +241,11 @@ function renderCoverageTable(rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.pref}</td>
-      <td>${row.visited}</td>
       <td>${row.total}</td>
+      <td>${row.visited}</td>
       <td>${(row.ratio * 100).toFixed(1)}%</td>
+      <td>${row.explored}</td>
+      <td>${(row.exploredRatio * 100).toFixed(1)}%</td>
       <td>${row.avg.toFixed(2)}</td>
     `;
     prefCoverageBody.appendChild(tr);
@@ -246,6 +257,7 @@ function refreshAnalytics() {
   let marked = 0;
   let sumLevels = 0;
   let visitedCountForAvg = 0;
+  let explored = 0;
   const levelCounts = [0, 0, 0, 0, 0, 0];
 
   metaByKey.forEach((_, key) => {
@@ -256,11 +268,15 @@ function refreshAnalytics() {
       sumLevels += level;
       visitedCountForAvg += 1;
     }
+    if (level >= 3) {
+      explored += 1;
+    }
   });
 
   const prefRows = buildPrefStats();
   prefRowsCache = prefRows;
   const visitedPref = prefRows.filter((row) => row.visited > 0).length;
+  const exploredPref = prefRows.filter((row) => row.explored > 0).length;
   const avgLevel = visitedCountForAvg ? sumLevels / visitedCountForAvg : 0;
 
   visitedCountEl.textContent = marked;
@@ -268,7 +284,7 @@ function refreshAnalytics() {
   visitedPrefCountEl.textContent = visitedPref;
 
   updateLevelBars(levelCounts);
-  updateGlobalMetrics(marked, visitedPref, avgLevel);
+  updateGlobalMetrics(marked, visitedPref, avgLevel, explored, exploredPref);
   renderCoverageTable(prefRows);
 }
 
@@ -402,11 +418,11 @@ function initMap() {
     fullscreenControl: false,
     styles: [
       { elementType: "geometry", stylers: [{ color: "#20243a" }] },
-      // { elementType: "labels.text.stroke", stylers: [{ color: "#0b0d15" }] },
-      // { elementType: "labels.text.fill", stylers: [{ color: "#9fa8c3" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#0b0d15" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#9fa8c3" }] },
       // { featureType: "poi", stylers: [{ visibility: "off" }] },
-      // { featureType: "road", elementType: "geometry", stylers: [{ color: "#394061" }] },
-      // { featureType: "water", elementType: "geometry", stylers: [{ color: "#151823" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: "#394061" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#151823" }] },
     ]
   }
 )
@@ -415,8 +431,24 @@ function initMap() {
 
   muniData = new google.maps.Data({ map });
   prefData = new google.maps.Data({ map });
+  infoWindow = new google.maps.InfoWindow();
 
   muniData.setStyle((feature) => styleForLevel(feature.getProperty("level") || 0));
+  muniData.addListener('click', function(event) {
+    const feature = event.feature;
+    const pref = feature.getProperty("N03_001") || "";
+    const muni = getMunicipalityFromProps({
+      N03_002: feature.getProperty("N03_002") || "",
+      N03_003: feature.getProperty("N03_003") || "",
+      N03_004: feature.getProperty("N03_004") || "",
+    });
+    const level = getLevel(feature.getProperty("key"));
+    const levelNames = ["未去过", "路过", "接地", "访问", "宿泊", "居住"];
+    const levelName = levelNames[level] || "未知";
+    infoWindow.setContent(`<div style="font-family: 'Space Grotesk', sans-serif; padding: 8px;"><strong>${pref}${muni}</strong><br>拜访程度: ${levelName}</div>`);
+    infoWindow.setPosition(event.latLng);
+    infoWindow.open(map);
+  });
   prefData.setStyle({
     strokeColor: "#3b82f6",
     strokeOpacity: 0.8,
