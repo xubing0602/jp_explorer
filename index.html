@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>日本市町村去过地图</title>
+    <title>日本市町村解锁地图</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,12 +16,16 @@
     <div class="app">
       <header class="topbar">
         <div class="brand">
-          <div class="title">日本市町村去过地图</div>
-          <div class="subtitle">在 CSV 里更新拜访程度，地图自动映射颜色</div>
+          <div class="title">日本市町村解锁地图</div>
+          <!-- <div class="subtitle">在 CSV 里更新拜访程度，地图自动映射颜色</div> -->
         </div>
         <div class="stats">
           <div class="stat">
-            <div class="stat-label">已标记市町村</div>
+            <div class="stat-label">市町村总计</div>
+            <div class="stat-value" id="totalCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">已解锁市町村</div>
             <div class="stat-value" id="visitedCount">0</div>
           </div>
           <div class="stat">
@@ -29,8 +33,12 @@
             <div class="stat-value" id="visitedPrefCount">0</div>
           </div>
           <div class="stat">
-            <div class="stat-label">市町村总计</div>
-            <div class="stat-value" id="totalCount">0</div>
+            <div class="stat-label">已探索市町村</div>
+            <div class="stat-value" id="exploredCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">已探索县</div>
+            <div class="stat-value" id="exploredPrefCount">0</div>
           </div>
         </div>
         <div class="legend legend-inline">
@@ -94,7 +102,7 @@
                       <button class="sort-btn" data-table="coverage" data-key="exploredRatio">探索比例</button>
                     </th>                    
                     <th>
-                      <button class="sort-btn" data-table="coverage" data-key="avg">平均拜访程度</button>
+                      <button class="sort-btn" data-table="coverage" data-key="avg">平均解锁程度</button>
                     </th>
                   </tr>
                 </thead>

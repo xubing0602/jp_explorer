@@ -5,6 +5,8 @@ const CSV_URL = "data/visits.csv";
 const statusEl = document.getElementById("status");
 const visitedCountEl = document.getElementById("visitedCount");
 const visitedPrefCountEl = document.getElementById("visitedPrefCount");
+const exploredCountEl = document.getElementById("exploredCount");
+const exploredPrefCountEl = document.getElementById("exploredPrefCount");
 const totalCountEl = document.getElementById("totalCount");
 const levelBarsEl = document.getElementById("levelBars");
 const globalMetricsEl = document.getElementById("globalMetrics");
@@ -44,11 +46,11 @@ function updateStatus(message, isError = false) {
 function updateReadyStatus() {
   if (!dataReady) return;
   if (csvReady) {
-    updateStatus("加载完成，已读取 CSV。", false);
+    updateStatus("加载完成", false);
   } else if (csvMissing) {
-    updateStatus("未找到 CSV，已使用空数据。请编辑 data/visits.csv。", true);
+    updateStatus("未找到文件，已使用空数据。请编辑 data/visits.csv。", true);
   } else {
-    updateStatus("行政区加载完成，正在读取 CSV...", false);
+    updateStatus("行政区加载完成，正在读取文件...", false);
   }
 }
 
@@ -76,8 +78,8 @@ function styleForLevel(level) {
   const style = LEVEL_STYLES[safe] || LEVEL_STYLES[0];
   return {
     strokeColor: "#6a86a8",
-    strokeOpacity: 0.6,
-    strokeWeight: 0.8,
+    strokeOpacity: 0.7,
+    strokeWeight: 1.5,
     fillColor: style.fill,
     fillOpacity: style.fillOpacity,
     clickable: true,
@@ -218,7 +220,7 @@ function updateGlobalMetrics(marked, visitedPref, avgLevel, explored, exploredPr
     <div class="metric"><span>已解锁县</span><strong>${visitedPref} (${ratioPref.toFixed(1)}%)</strong></div>
     <div class="metric"><span>已探索市町村</span><strong>${explored} (${exploredRatio.toFixed(1)}%)</strong></div>
     <div class="metric"><span>已探索县</span><strong>${exploredPref} (${exploredRatioPref.toFixed(1)}%)</strong></div>
-    <div class="metric"><span>平均拜访程度</span><strong>${avgLevel.toFixed(2)}</strong></div>
+    <div class="metric"><span>平均解锁程度</span><strong>${avgLevel.toFixed(2)}</strong></div>
   `;
 }
 
@@ -282,6 +284,8 @@ function refreshAnalytics() {
   visitedCountEl.textContent = marked;
   totalCountEl.textContent = totalFeatures;
   visitedPrefCountEl.textContent = visitedPref;
+  exploredCountEl.textContent = explored;
+  exploredPrefCountEl.textContent = exploredPref;
 
   updateLevelBars(levelCounts);
   updateGlobalMetrics(marked, visitedPref, avgLevel, explored, exploredPref);
@@ -416,14 +420,229 @@ function initMap() {
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
+    // below style is a modified version of "Night Mode" from Google Maps styling wizard: https://mapstyle.withgoogle.com/
     styles: [
-      { elementType: "geometry", stylers: [{ color: "#20243a" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#0b0d15" }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#9fa8c3" }] },
-      // { featureType: "poi", stylers: [{ visibility: "off" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ color: "#394061" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#151823" }] },
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#242f3e"
+      }
     ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#746855"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#242f3e"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#263c3f"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#6b9a76"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#38414e"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#212a37"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#9ca5b3"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#746855"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#1f2835"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#f3d19c"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#2f3948"
+      }
+    ]
+  },
+  {
+    "featureType": "transit.line",
+    "stylers": [
+      {
+        "visibility": "on"
+      },
+      {
+        "weight": 3
+      }
+    ]
+  },
+  {
+    "featureType": "transit.station",
+    "stylers": [
+      {
+        "visibility": "on"
+      }
+    ]
+  },
+  {
+    "featureType": "transit.station",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#17263c"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#515c6d"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#17263c"
+      }
+    ]
+  }
+]
   }
 )
 
@@ -452,7 +671,7 @@ function initMap() {
   prefData.setStyle({
     strokeColor: "#3b82f6",
     strokeOpacity: 0.8,
-    strokeWeight: 2,
+    strokeWeight: 3,
     fillOpacity: 0,
     clickable: false,
   });
