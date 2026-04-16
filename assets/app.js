@@ -23,7 +23,8 @@ let map;
 let muniData;
 let prefData;
 let prefRowsCache = [];
-let infoWindow;
+let hoveredFeature = null;
+let mapTooltipEl = null;
 
 const sortState = {
   coverage: { key: "ratio", dir: "desc" },
@@ -37,6 +38,7 @@ const LEVEL_STYLES = [
   { fill: "#f59e0b", fillOpacity: 0.7 },
   { fill: "#ef4444", fillOpacity: 0.75 },
 ];
+const LEVEL_LABELS = ["未去过", "路过", "接地", "访问", "宿泊", "居住"];
 
 function updateStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -84,6 +86,62 @@ function styleForLevel(level) {
     fillOpacity: style.fillOpacity,
     clickable: true,
   };
+}
+
+function styleForFeature(feature) {
+  const base = styleForLevel(feature.getProperty("level") || 0);
+  if (feature.getProperty("hovered")) {
+    return {
+      ...base,
+      strokeColor: "#6be3ff",
+      strokeOpacity: 1,
+      strokeWeight: 2.6,
+      fillOpacity: Math.min(0.95, base.fillOpacity + 0.18),
+    };
+  }
+  return base;
+}
+
+function ensureMapTooltip() {
+  if (mapTooltipEl) return mapTooltipEl;
+  const tooltip = document.createElement("div");
+  tooltip.className = "map-tooltip";
+  tooltip.innerHTML = `
+    <div class="map-tooltip-title"></div>
+    <div class="map-tooltip-meta"></div>
+  `;
+  document.querySelector(".map-wrap")?.appendChild(tooltip);
+  mapTooltipEl = tooltip;
+  return mapTooltipEl;
+}
+
+function showHoverTooltip(event) {
+  const tooltip = ensureMapTooltip();
+  if (!tooltip || !event || !event.feature || !event.domEvent) return;
+  const titleEl = tooltip.querySelector(".map-tooltip-title");
+  const metaEl = tooltip.querySelector(".map-tooltip-meta");
+  const label = event.feature.getProperty("label") || "市町村";
+  const level = event.feature.getProperty("level") || 0;
+  if (titleEl) titleEl.textContent = label;
+  if (metaEl) metaEl.textContent = `拜访程度 · ${LEVEL_LABELS[level] || "未去过"}`;
+
+  const mapRect = document.getElementById("map")?.getBoundingClientRect();
+  if (!mapRect) return;
+  const x = event.domEvent.clientX - mapRect.left + 14;
+  const y = event.domEvent.clientY - mapRect.top + 14;
+  tooltip.style.transform = `translate(${x}px, ${y}px)`;
+  tooltip.classList.add("visible");
+}
+
+function hideHoverTooltip() {
+  if (!mapTooltipEl) return;
+  mapTooltipEl.classList.remove("visible");
+}
+
+function clearHoveredFeature() {
+  if (!hoveredFeature) return;
+  hoveredFeature.setProperty("hovered", false);
+  hoveredFeature = null;
 }
 
 function applyLevelsToFeatures() {
@@ -379,6 +437,8 @@ async function loadMunicipalities() {
       const key = getKey(pref, muni);
       feature.setProperty("key", key);
       feature.setProperty("level", getLevel(key));
+      feature.setProperty("label", `${pref}${muni}`);
+      feature.setProperty("hovered", false);
       if (!metaByKey.has(key)) {
         metaByKey.set(key, { pref, muni });
       }
@@ -650,28 +710,21 @@ function initMap() {
 
   muniData = new google.maps.Data({ map });
   prefData = new google.maps.Data({ map });
-  infoWindow = new google.maps.InfoWindow();
-
-  muniData.setStyle((feature) => styleForLevel(feature.getProperty("level") || 0));
-  muniData.addListener('click', function(event) {
-    const feature = event.feature;
-    const pref = feature.getProperty("N03_001") || "";
-    const muni = getMunicipalityFromProps({
-      N03_002: feature.getProperty("N03_002") || "",
-      N03_003: feature.getProperty("N03_003") || "",
-      N03_004: feature.getProperty("N03_004") || "",
-    });
-    const level = getLevel(feature.getProperty("key"));
-    const levelNames = ["未去过", "路过", "接地", "访问", "宿泊", "居住"];
-    const levelName = levelNames[level] || "未知";
-    infoWindow.setContent(`<div style="font-family: 'Space Grotesk', sans-serif; padding: 8px;"><strong>${pref}${muni}</strong><br>拜访程度: ${levelName}</div>`);
-    infoWindow.setPosition(event.latLng);
-    infoWindow.open(map);
+  muniData.setStyle((feature) => styleForFeature(feature));
+  muniData.addListener("mouseover", (event) => {
+    clearHoveredFeature();
+    hoveredFeature = event.feature;
+    hoveredFeature.setProperty("hovered", true);
+    showHoverTooltip(event);
+  });
+  muniData.addListener("mouseout", () => {
+    clearHoveredFeature();
+    hideHoverTooltip();
   });
   prefData.setStyle({
     strokeColor: "#3b82f6",
     strokeOpacity: 0.8,
-    strokeWeight: 3,
+    strokeWeight: 2.5,
     fillOpacity: 0,
     clickable: false,
   });

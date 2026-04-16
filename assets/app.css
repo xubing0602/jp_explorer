@@ -199,6 +199,44 @@ body::after {
   min-height: 520px;
 }
 
+.map-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 20;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(107, 227, 255, 0.65);
+  background: linear-gradient(135deg, rgba(11, 16, 28, 0.9), rgba(20, 38, 58, 0.8));
+  color: #deefff;
+  box-shadow: 0 12px 28px rgba(8, 18, 32, 0.45), 0 0 18px rgba(107, 227, 255, 0.3);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translate(-9999px, -9999px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.map-tooltip.visible {
+  opacity: 1;
+}
+
+.map-tooltip-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #f4fbff;
+}
+
+.map-tooltip-meta {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #9ed9ff;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .analytics {
   display: flex;
   flex-direction: column;
