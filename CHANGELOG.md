@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-04-25
+
+### Changed
+- Map now loads in a single render pass: municipality TopoJSON, prefecture TopoJSON, and `visits.csv` are fetched in parallel and applied at once, eliminating the gradual chunked fill-in and color flash on startup.
+
 ## 2026-04-17
 
 ### Added

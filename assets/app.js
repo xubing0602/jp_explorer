@@ -51,8 +51,6 @@ function updateReadyStatus() {
     updateStatus("加载完成", false);
   } else if (csvMissing) {
     updateStatus("未找到文件，已使用空数据。请编辑 data/visits.csv。", true);
-  } else {
-    updateStatus("行政区加载完成，正在读取文件...", false);
   }
 }
 
@@ -368,104 +366,98 @@ function setupSortHandlers() {
   });
 }
 
-function scheduleChunk(callback) {
-  if (window.requestIdleCallback) {
-    window.requestIdleCallback(callback, { timeout: 120 });
-  } else {
-    setTimeout(callback, 16);
-  }
+async function fetchTopoFeatures(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${url}`);
+  const topo = await res.json();
+  const objName = topo.objects && Object.keys(topo.objects)[0];
+  if (!objName) throw new Error(`No objects in topojson: ${url}`);
+  return topojson.feature(topo, topo.objects[objName]);
 }
 
-async function loadCsv() {
+async function fetchCsvRecords() {
   try {
     const res = await fetch(CSV_URL);
     if (!res.ok) throw new Error("CSV request failed");
     const text = await res.text();
-    const parsed = parseCsv(text);
-    applyRecords(parsed);
-    csvReady = true;
-    updateReadyStatus();
+    return { records: parseCsv(text), missing: false };
   } catch (err) {
     console.warn(err);
-    csvMissing = true;
-    applyRecords([]);
-    updateReadyStatus();
+    return { records: [], missing: true };
   }
 }
 
-async function loadMunicipalities() {
-  const res = await fetch(DATA_URL);
-  if (!res.ok) throw new Error("Data request failed");
-  const topo = await res.json();
-  const objName = topo.objects && Object.keys(topo.objects)[0];
-  if (!objName) throw new Error("No objects in topojson");
-  const geojson = topojson.feature(topo, topo.objects[objName]);
+function ingestMunicipalities(geojson) {
   if (geojson.bbox && map) {
     const [minX, minY, maxX, maxY] = geojson.bbox;
-    const bounds = new google.maps.LatLngBounds(
-      { lat: minY, lng: minX },
-      { lat: maxY, lng: maxX }
+    map.fitBounds(
+      new google.maps.LatLngBounds(
+        { lat: minY, lng: minX },
+        { lat: maxY, lng: maxX }
+      )
     );
-    map.fitBounds(bounds);
   }
-  const features = geojson.features || [];
-  let index = 0;
   const counted = new Set();
   totalFeatures = 0;
   metaByKey.clear();
-
-  const processChunk = () => {
-    const slice = features.slice(index, index + 1600);
-    if (!slice.length) {
-      dataReady = true;
-      refreshAnalytics();
-      updateReadyStatus();
-      return;
+  const features = geojson.features || [];
+  for (const f of features) {
+    const props = f.properties || {};
+    const pref = props.N03_001 || "";
+    const muni = getMunicipalityFromProps(props);
+    if (!pref || !muni) continue;
+    const key = getKey(pref, muni);
+    props.key = key;
+    props.level = getLevel(key);
+    props.label = `${pref}${muni}`;
+    props.hovered = false;
+    if (!metaByKey.has(key)) metaByKey.set(key, { pref, muni });
+    if (!counted.has(key)) {
+      counted.add(key);
+      totalFeatures += 1;
     }
-    const added = muniData.addGeoJson({
-      type: "FeatureCollection",
-      features: slice,
-    });
-    added.forEach((feature) => {
-      const pref = feature.getProperty("N03_001") || "";
-      const muni = getMunicipalityFromProps({
-        N03_002: feature.getProperty("N03_002") || "",
-        N03_003: feature.getProperty("N03_003") || "",
-        N03_004: feature.getProperty("N03_004") || "",
-      });
-      if (!pref || !muni) return;
-      const key = getKey(pref, muni);
-      feature.setProperty("key", key);
-      feature.setProperty("level", getLevel(key));
-      feature.setProperty("label", `${pref}${muni}`);
-      feature.setProperty("hovered", false);
-      if (!metaByKey.has(key)) {
-        metaByKey.set(key, { pref, muni });
-      }
-      if (!counted.has(key)) {
-        counted.add(key);
-        totalFeatures += 1;
-      }
-    });
-    index += slice.length;
-    scheduleChunk(processChunk);
-  };
-
-  scheduleChunk(processChunk);
+  }
+  muniData.addGeoJson(geojson);
 }
 
-async function loadPrefectures() {
-  try {
-    const res = await fetch(PREFECTURE_URL);
-    if (!res.ok) throw new Error("Prefecture request failed");
-    const topo = await res.json();
-    const objName = topo.objects && Object.keys(topo.objects)[0];
-    if (!objName) throw new Error("No objects in prefecture topojson");
-    const geojson = topojson.feature(topo, topo.objects[objName]);
-    prefData.addGeoJson(geojson);
-  } catch (err) {
-    console.warn("Prefecture boundaries failed to load", err);
+async function loadAllData() {
+  updateStatus("正在加载行政区数据...", false);
+  const [muniResult, prefResult, csvResult] = await Promise.allSettled([
+    fetchTopoFeatures(DATA_URL),
+    fetchTopoFeatures(PREFECTURE_URL),
+    fetchCsvRecords(),
+  ]);
+
+  if (csvResult.status === "fulfilled") {
+    const { records: list, missing } = csvResult.value;
+    csvMissing = missing;
+    csvReady = !missing;
+    levelByKey.clear();
+    records = list;
+    list.forEach((row) => levelByKey.set(getKey(row.pref, row.muni), row.level || 0));
+  } else {
+    csvMissing = true;
+    levelByKey.clear();
+    records = [];
   }
+
+  if (muniResult.status === "fulfilled") {
+    ingestMunicipalities(muniResult.value);
+    dataReady = true;
+  } else {
+    console.error(muniResult.reason);
+    updateStatus("数据加载失败，请确认 data/municipalities2025.topo.json 已生成。", true);
+    return;
+  }
+
+  if (prefResult.status === "fulfilled") {
+    prefData.addGeoJson(prefResult.value);
+  } else {
+    console.warn("Prefecture boundaries failed to load", prefResult.reason);
+  }
+
+  refreshAnalytics();
+  updateReadyStatus();
 }
 
 function initMap() {
@@ -730,12 +722,7 @@ function initMap() {
   });
 
   setupSortHandlers();
-  loadCsv();
-  loadMunicipalities().catch((err) => {
-    console.error(err);
-    updateStatus("数据加载失败，请确认 data/municipalities2025.topo.json 已生成。", true);
-  });
-  loadPrefectures();
+  loadAllData();
 }
 
 initMap();
