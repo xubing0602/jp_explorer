@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-04-26
+
+### Added
+- Responsive design for mobile and tablet devices.
+  - **Mobile (≤ 600px)**: app padding reduced to `12px`; topbar stats pushed to their own full-width row and laid out as a `repeat(3, 1fr)` grid (2 rows of 3 + 2) so all five stats are visible without overflow; stat font sizes and padding tightened to fit narrower columns; map `min-height` lowered from `520px` to `300px` and height changed to `52vh`; bar-chart label column narrowed; table cell padding and font size reduced (table still horizontally scrollable).
+  - **Tablet (≤ 900px)**: existing single-column analytics and metric-list collapse retained; map height set to `60vh`.
+
+### Removed
+- Status bar (`#status` / "加载完成") removed from the header — loading state is no longer surfaced in the UI.
+  - HTML element deleted from `index.html`.
+  - `.status` CSS rule removed from `app.css`.
+  - `updateStatus()` in `app.js` guarded with an early return when the element is absent, preventing runtime errors.
+
 ## 2026-04-25
 
 ### Changed

@@ -164,15 +164,6 @@ body::after {
   background: #ef4444;
 }
 
-.status {
-  font-size: 0.85rem;
-  color: var(--muted);
-  background: rgba(15, 27, 45, 0.05);
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed rgba(15, 27, 45, 0.12);
-  flex-basis: 100%;
-}
 
 .map-wrap {
   background: var(--panel);
@@ -428,6 +419,7 @@ tbody tr:hover {
   }
 }
 
+/* ── Tablet (601px – 900px) ── */
 @media (max-width: 900px) {
   .analytics-grid {
     grid-template-columns: 1fr;
@@ -439,5 +431,81 @@ tbody tr:hover {
 
   #map {
     height: 60vh;
+  }
+}
+
+/* ── Mobile (≤ 600px) ── */
+@media (max-width: 600px) {
+  .app {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .topbar {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
+  /* Stats: push to own row, use 3-column grid */
+  .stats {
+    flex: 0 0 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .stat {
+    min-width: 0;
+    padding: 10px 8px;
+  }
+
+  .stat-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-value {
+    font-size: 1.15rem;
+  }
+
+  .legend-inline {
+    font-size: 0.78rem;
+    gap: 8px 10px;
+  }
+
+  .swatch {
+    width: 13px;
+    height: 13px;
+  }
+
+  /* Map: shorter on small screens */
+  #map {
+    height: 52vh;
+    min-height: 300px;
+  }
+
+  /* Analytics cards: full-width single column */
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Bar chart label column narrower */
+  .bar-row {
+    grid-template-columns: 52px 1fr auto;
+    font-size: 0.78rem;
+  }
+
+  /* Table: tighten cell padding */
+  th, td {
+    padding: 8px 10px;
+    font-size: 0.82rem;
   }
 }

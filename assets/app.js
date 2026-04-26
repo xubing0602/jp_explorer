@@ -41,6 +41,7 @@ const LEVEL_STYLES = [
 const LEVEL_LABELS = ["未去过", "路过", "接地", "访问", "宿泊", "居住"];
 
 function updateStatus(message, isError = false) {
+  if (!statusEl) return;
   statusEl.textContent = message;
   statusEl.style.color = isError ? "#d46666" : "";
 }
